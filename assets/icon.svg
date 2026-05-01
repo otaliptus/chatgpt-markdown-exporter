@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="ChatGPT Markdown Exporter icon">
+  <rect width="512" height="512" rx="96" fill="#176b48"/>
+  <path d="M144 100h166l58 58v254H144z" fill="#f8faf7"/>
+  <path d="M310 100v58h58" fill="#d9e1da"/>
+  <path d="M184 210h144M184 252h144M184 294h96" stroke="#176b48" stroke-width="24" stroke-linecap="round"/>
+  <path d="M256 366l48-48h-32v-64h-32v64h-32z" fill="#176b48"/>
+</svg>

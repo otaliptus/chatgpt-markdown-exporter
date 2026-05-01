@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ChatGPT Markdown Exporter</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Markdown Export</h1>
+        <p>Save the open ChatGPT conversation as a Markdown file.</p>
+      </header>
+
+      <section class="options" aria-label="Export options">
+        <label>
+          <input id="autoScroll" type="checkbox" checked>
+          Load entire conversation before export
+        </label>
+        <label>
+          <input id="includeMetadata" type="checkbox" checked>
+          Include title, URL, and export time
+        </label>
+      </section>
+
+      <button id="exportButton" type="button">Download Markdown</button>
+      <p id="status" role="status" aria-live="polite"></p>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
