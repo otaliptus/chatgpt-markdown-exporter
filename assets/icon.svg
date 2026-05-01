@@ -1,21 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="ChatGPT Markdown Exporter logo">
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="GPT to Markdown">
   <defs>
-    <linearGradient id="sky" x1="104" y1="76" x2="408" y2="438" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#9ee7cf"/>
-      <stop offset="1" stop-color="#246b55"/>
+    <linearGradient id="bg" x1="92" y1="62" x2="420" y2="462" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2f8cff"/>
+      <stop offset="1" stop-color="#0047d9"/>
     </linearGradient>
-    <filter id="softShadow" x="54" y="54" width="404" height="416" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#0c2d24" flood-opacity=".24"/>
+    <filter id="textShadow" x="64" y="86" width="384" height="320" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="8" stdDeviation="6" flood-color="#00256d" flood-opacity=".28"/>
     </filter>
   </defs>
-  <rect width="512" height="512" rx="112" fill="#f6fbf7"/>
-  <circle cx="384" cy="130" r="54" fill="#f8d56f"/>
-  <path d="M92 366c48-58 95-87 140-87 34 0 58 16 87 35 31 20 67 43 123 45v69H92z" fill="#d5efe5"/>
-  <path d="M70 408c59-71 119-106 180-106 44 0 77 18 111 37 27 15 55 31 91 38v59H70z" fill="#a8d9c8"/>
-  <g filter="url(#softShadow)">
-    <rect x="119" y="91" width="274" height="330" rx="36" fill="url(#sky)"/>
-    <path d="M170 166h172M170 218h132M170 270h172" stroke="#f8fbf7" stroke-width="25" stroke-linecap="round"/>
-    <path d="M256 363l65-65h-39v-86h-52v86h-39z" fill="#f8fbf7"/>
+  <rect width="512" height="512" rx="104" fill="url(#bg)"/>
+  <path d="M78 96c67-45 138-64 215-57 57 6 105 25 144 57" fill="none" stroke="#73b8ff" stroke-width="24" stroke-linecap="round" opacity=".28"/>
+  <g filter="url(#textShadow)">
+    <text x="256" y="218" text-anchor="middle" font-family="Avenir Next, SF Pro Display, Inter, Arial Rounded MT Bold, Arial, sans-serif" font-size="126" font-weight="900" letter-spacing="2" fill="#ffffff">GPT</text>
+    <text x="183" y="328" text-anchor="middle" font-family="Avenir Next, SF Pro Display, Inter, Arial Rounded MT Bold, Arial, sans-serif" font-size="72" font-weight="900" fill="#ffffff">-&gt;</text>
+    <rect x="229" y="260" width="174" height="88" rx="28" fill="#ffffff"/>
+    <text x="316" y="323" text-anchor="middle" font-family="Avenir Next, SF Pro Display, Inter, Arial Rounded MT Bold, Arial, sans-serif" font-size="62" font-weight="900" letter-spacing="-1" fill="#0052f5">.md</text>
   </g>
-  <path d="M147 402c42 24 91 35 143 30 35-3 67-14 94-31" fill="none" stroke="#176b48" stroke-width="18" stroke-linecap="round" opacity=".42"/>
 </svg>
