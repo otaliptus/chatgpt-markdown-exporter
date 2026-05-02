@@ -48,6 +48,20 @@ label {
   line-height: 1.35;
 }
 
+label:has(select) {
+  grid-template-columns: 1fr;
+}
+
+select {
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid #cdd7cf;
+  border-radius: 6px;
+  color: inherit;
+  background: #ffffff;
+  font: inherit;
+}
+
 input {
   width: 16px;
   height: 16px;
@@ -91,5 +105,10 @@ button:disabled {
   .options {
     border-color: #33423a;
     background: #19221d;
+  }
+
+  select {
+    border-color: #405047;
+    background: #111713;
   }
 }

@@ -7,6 +7,7 @@ const ROLE_LABELS = {
   system: "System",
   tool: "Tool"
 };
+const LATEX_SECTION_COMMANDS = ["subsection", "subsubsection", "paragraph", "subparagraph"];
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -55,6 +56,41 @@ function absoluteUrl(href) {
 function latexFromKatex(element) {
   const annotation = element.querySelector(".katex-mathml annotation[encoding='application/x-tex']");
   return normalizeWhitespace(annotation?.textContent || "");
+}
+
+function escapeLatexText(value) {
+  return String(value || "").replace(/[\\{}$&%#_^~]/g, (character) => {
+    const replacements = {
+      "\\": "\\textbackslash{}",
+      "{": "\\{",
+      "}": "\\}",
+      "$": "\\$",
+      "&": "\\&",
+      "%": "\\%",
+      "#": "\\#",
+      "_": "\\_",
+      "^": "\\textasciicircum{}",
+      "~": "\\textasciitilde{}"
+    };
+    return replacements[character];
+  });
+}
+
+function escapeLatexUrl(value) {
+  return String(value || "").replace(/[\\{}%#]/g, (character) => {
+    const replacements = {
+      "\\": "\\textbackslash{}",
+      "{": "\\{",
+      "}": "\\}",
+      "%": "\\%",
+      "#": "\\#"
+    };
+    return replacements[character];
+  });
+}
+
+function latexCommand(name, content) {
+  return content ? `\\${name}{${content}}` : "";
 }
 
 function inlineMarkdown(node) {
@@ -198,6 +234,140 @@ function childrenMarkdown(element, listDepth = 0) {
   return Array.from(element.childNodes).map((child) => blockMarkdown(child, listDepth)).join("");
 }
 
+function inlineLatex(node) {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return escapeLatexText(node.textContent || "");
+  }
+
+  if (node.nodeType !== Node.ELEMENT_NODE) {
+    return "";
+  }
+
+  const element = node;
+  const tag = element.tagName.toLowerCase();
+
+  if (element.matches(".katex-display")) {
+    const latex = latexFromKatex(element);
+    return latex ? `\\[\n${latex}\n\\]\n\n` : "";
+  }
+
+  if (element.matches(".katex")) {
+    const latex = latexFromKatex(element);
+    return latex ? `\\(${latex}\\)` : "";
+  }
+
+  if (element.matches(".katex-html, .katex-mathml")) {
+    return "";
+  }
+
+  const children = Array.from(element.childNodes).map(inlineLatex).join("");
+
+  if (tag === "br") return "\n";
+  if (tag === "img") {
+    const alt = normalizeWhitespace(element.getAttribute("alt") || element.getAttribute("aria-label") || "image");
+    const src = element.getAttribute("src");
+    return src ? latexCommand("href", `${escapeLatexUrl(absoluteUrl(src))}{${escapeLatexText(alt || src)}}`) : escapeLatexText(alt);
+  }
+  if (tag === "input" && element.getAttribute("type") === "checkbox") {
+    return element.checked ? "$\\boxtimes$" : "$\\square$";
+  }
+  if (tag === "code") return latexCommand("texttt", escapeLatexText(element.textContent || ""));
+  if (tag === "strong" || tag === "b") return latexCommand("textbf", children);
+  if (tag === "em" || tag === "i") return latexCommand("emph", children);
+  if (tag === "s" || tag === "del") return latexCommand("sout", children);
+  if (tag === "a") {
+    const text = normalizeWhitespace(children || escapeLatexText(element.textContent || element.href || ""));
+    const href = element.getAttribute("href");
+    return href ? `\\href{${escapeLatexUrl(absoluteUrl(href))}}{${text || escapeLatexText(href)}}` : text;
+  }
+
+  return children;
+}
+
+function blockLatex(node, listDepth = 0) {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return escapeLatexText(node.textContent || "");
+  }
+
+  if (node.nodeType !== Node.ELEMENT_NODE) {
+    return "";
+  }
+
+  const element = node;
+  const tag = element.tagName.toLowerCase();
+
+  if (element.matches("[data-testid='copy-turn-action-button'], button, svg, style, script, .katex-html, .katex-mathml")) {
+    return "";
+  }
+
+  if (element.matches(".katex-display")) {
+    const latex = latexFromKatex(element);
+    return latex ? `\\[\n${latex}\n\\]\n\n` : "";
+  }
+
+  if (element.matches(".katex")) {
+    const latex = latexFromKatex(element);
+    return latex ? `\\(${latex}\\)` : "";
+  }
+
+  if (tag === "pre") {
+    return `\n\n\\begin{verbatim}\n${codeTextFromPre(element)}\n\\end{verbatim}\n\n`;
+  }
+
+  if (/^h[1-6]$/.test(tag)) {
+    const level = Math.min(Number(tag.slice(1)) - 1, LATEX_SECTION_COMMANDS.length - 1);
+    const command = LATEX_SECTION_COMMANDS[Math.max(level, 0)];
+    return `\n\n\\${command}*{${normalizeWhitespace(inlineLatex(element))}}\n\n`;
+  }
+
+  if (tag === "p") {
+    return `\n\n${normalizeWhitespace(inlineLatex(element))}\n`;
+  }
+
+  if (tag === "blockquote") {
+    return `\n\n\\begin{quote}\n${normalizeWhitespace(childrenLatex(element, listDepth))}\n\\end{quote}\n\n`;
+  }
+
+  if (tag === "ul" || tag === "ol") {
+    const ordered = tag === "ol";
+    const env = ordered ? "enumerate" : "itemize";
+    const start = Number.parseInt(element.getAttribute("start") || "1", 10);
+    const options = ordered && Number.isFinite(start) && start > 1 ? `[start=${start}]` : "";
+    const items = Array.from(element.children).filter((child) => child.tagName?.toLowerCase() === "li");
+    const lines = items.map((item) => `\\item ${normalizeWhitespace(childrenLatex(item, listDepth + 1))}`);
+    return `\n\n\\begin{${env}}${options}\n${lines.join("\n")}\n\\end{${env}}\n\n`;
+  }
+
+  if (tag === "table") {
+    return `\n\n${tableToLatex(element)}\n\n`;
+  }
+
+  if (tag === "hr") {
+    return "\n\n\\bigskip\\hrule\\bigskip\n\n";
+  }
+
+  if (tag === "details") {
+    const summary = element.querySelector(":scope > summary");
+    const summaryText = summary ? normalizeWhitespace(inlineLatex(summary)) : "Details";
+    const clone = element.cloneNode(true);
+    clone.querySelector(":scope > summary")?.remove();
+    return `\n\n\\paragraph*{${summaryText}}\n${normalizeWhitespace(childrenLatex(clone, listDepth))}\n\n`;
+  }
+
+  if (["div", "section", "article", "main", "span"].includes(tag)) {
+    return childrenLatex(element, listDepth);
+  }
+
+  return inlineLatex(element);
+}
+
+function childrenLatex(element, listDepth = 0) {
+  return Array.from(element.childNodes)
+    .filter((child) => child.nodeType !== Node.TEXT_NODE || /\S/.test(child.textContent || ""))
+    .map((child) => blockLatex(child, listDepth))
+    .join("");
+}
+
 function tableToMarkdown(table) {
   const rows = Array.from(table.querySelectorAll("tr")).map((row) =>
     Array.from(row.children).map((cell) => normalizeWhitespace(inlineMarkdown(cell)).replace(/\|/g, "\\|"))
@@ -213,11 +383,38 @@ function tableToMarkdown(table) {
   return [header, separator, ...body].map((row) => `| ${row.join(" | ")} |`).join("\n");
 }
 
+function tableToLatex(table) {
+  const rows = Array.from(table.querySelectorAll("tr")).map((row) =>
+    Array.from(row.children).map((cell) => normalizeWhitespace(inlineLatex(cell)))
+  );
+
+  if (!rows.length) return escapeLatexText(textFromNode(table));
+
+  const width = Math.max(...rows.map((row) => row.length));
+  const normalizedRows = rows.map((row) => Array.from({ length: width }, (_, index) => row[index] || ""));
+  const columns = Array.from({ length: width }, () => "l").join(" | ");
+  const body = normalizedRows
+    .map((row, index) => {
+      const line = `${row.join(" & ")} \\\\`;
+      return index === 0 ? `${line}\n\\hline` : line;
+    })
+    .join("\n");
+
+  return `\\begin{tabular}{${columns}}\n${body}\n\\end{tabular}`;
+}
+
 function elementToMarkdown(element) {
   const markdown = normalizeWhitespace(childrenMarkdown(element))
     .replace(/\n{3,}/g, "\n\n")
     .trim();
   return markdown || textFromNode(element);
+}
+
+function elementToLatex(element) {
+  const latex = normalizeWhitespace(childrenLatex(element))
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return latex || escapeLatexText(textFromNode(element));
 }
 
 function removeChatGptTurnLabels(element) {
@@ -233,6 +430,20 @@ function cleanMessageBody(markdown) {
   return markdown
     .replace(/^#{1,6}\s+(?:You|ChatGPT) said:\s*\n+/i, "")
     .trim();
+}
+
+function formatLeadingUploadedFileLabels(body) {
+  const files = [];
+  let rest = body.trim();
+
+  for (let index = 0; index < 5; index += 1) {
+    const match = rest.match(/^(.+?\.[A-Za-z0-9]{1,12})File(?=\s*\S)/);
+    if (!match) break;
+    files.push(match[1].trim());
+    rest = rest.slice(match[0].length).trimStart();
+  }
+
+  return files.length ? `${files.map((file) => `(${file})`).join("\n")}\n\n${rest}`.trim() : body;
 }
 
 function demoteMessageHeadings(markdown) {
@@ -264,11 +475,11 @@ function findConversationScrollContainer() {
   return candidates.find((node) => node.scrollHeight > node.clientHeight + 100) || document.scrollingElement || document.documentElement;
 }
 
-function readMessagesFromDom() {
+function readMessagesFromDom(format = "markdown") {
   return getMessageElements()
     .map((element, index) => {
       const role = getRole(element);
-      const body = getMessageBody(element);
+      const body = getMessageBody(element, format);
       const testId = element.getAttribute("data-testid");
       return {
         key: testId || `${index}:${role}:${body.slice(0, 160)}`,
@@ -294,7 +505,7 @@ function rememberMessages(collected, messages) {
   }
 }
 
-async function collectMessagesWhileScrolling() {
+async function collectMessagesWhileScrolling(format = "markdown") {
   const scroller = findConversationScrollContainer();
   const originalTop = scroller.scrollTop;
   const collected = new Map();
@@ -307,7 +518,7 @@ async function collectMessagesWhileScrolling() {
     previousHeight = scroller.scrollHeight;
   }
 
-  rememberMessages(collected, readMessagesFromDom());
+  rememberMessages(collected, readMessagesFromDom(format));
 
   let lastTop = -1;
   for (let attempt = 0; attempt < 240; attempt += 1) {
@@ -315,13 +526,13 @@ async function collectMessagesWhileScrolling() {
     const nextTop = Math.min(scroller.scrollTop + step, scroller.scrollHeight);
     scroller.scrollTo({ top: nextTop, behavior: "auto" });
     await sleep(180);
-    rememberMessages(collected, readMessagesFromDom());
+    rememberMessages(collected, readMessagesFromDom(format));
 
     const nearBottom = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 12;
     if (nearBottom && scroller.scrollTop === lastTop) break;
     if (nearBottom) {
       await sleep(300);
-      rememberMessages(collected, readMessagesFromDom());
+      rememberMessages(collected, readMessagesFromDom(format));
       break;
     }
     if (scroller.scrollTop === lastTop) break;
@@ -372,7 +583,7 @@ function getRole(element) {
   return "Message";
 }
 
-function getMessageBody(element) {
+function getMessageBody(element, format = "markdown") {
   const roleParts = element.matches("[data-message-author-role]")
     ? [element]
     : Array.from(element.querySelectorAll("[data-message-author-role]"))
@@ -391,13 +602,21 @@ function getMessageBody(element) {
   });
 
   if (markdownParts.length) {
+    if (format === "latex") {
+      return markdownParts.map(elementToLatex).filter(Boolean).join("\n\n");
+    }
+
     return demoteMessageHeadings(markdownParts.map(elementToMarkdown).filter(Boolean).join("\n\n"));
   }
 
   const clone = element.cloneNode(true);
   clone.querySelectorAll("button, svg, style, script, [aria-hidden='true']").forEach((node) => node.remove());
   removeChatGptTurnLabels(clone);
-  return demoteMessageHeadings(cleanMessageBody(elementToMarkdown(clone)));
+  if (format === "latex") {
+    return formatLeadingUploadedFileLabels(elementToLatex(clone));
+  }
+
+  return demoteMessageHeadings(formatLeadingUploadedFileLabels(cleanMessageBody(elementToMarkdown(clone))));
 }
 
 function conversationTitle() {
@@ -420,12 +639,58 @@ function buildMarkdown(messages, options) {
 
   return {
     title,
-    markdown: `${lines.join("\n").replace(/\n{4,}/g, "\n\n\n").trim()}\n`
+    content: `${lines.join("\n").replace(/\n{4,}/g, "\n\n\n").trim()}\n`
+  };
+}
+
+function buildLatex(messages, options) {
+  const title = conversationTitle();
+  const lines = [
+    "\\documentclass[12pt]{article}",
+    "\\usepackage[utf8]{inputenc}",
+    "\\usepackage{graphicx,amsmath,amsfonts,amssymb,amsthm,latexsym,geometry,color,asymptote,hyperref}",
+    "\\usepackage{enumitem}",
+    "\\usepackage[normalem]{ulem}",
+    "\\geometry{a4paper,total={450pt,700pt}}",
+    "\\hypersetup{colorlinks=true,linkcolor=blue,urlcolor=blue,citecolor=blue}",
+    "\\DeclareGraphicsExtensions{.pdf,.png,.jpg}",
+    "\\setcounter{secnumdepth}{0}",
+    "\\linespread{1.2}",
+    "\\setlength{\\parindent}{0pt}",
+    "\\newcommand{\\chatrole}[1]{\\par\\bigskip\\noindent{\\Large\\textbf{#1}}\\par\\medskip}",
+    "",
+    `\\title{${escapeLatexText(title)}}`,
+    "\\date{}",
+    "",
+    "\\begin{document}",
+    "\\maketitle"
+  ];
+
+  if (options.includeMetadata) {
+    lines.push(
+      "",
+      "\\begin{itemize}",
+      `\\item Source: \\url{${escapeLatexUrl(absoluteUrl(location.href))}}`,
+      `\\item Exported: ${escapeLatexText(new Date().toISOString())}`,
+      `\\item Messages: ${messages.length}`,
+      "\\end{itemize}"
+    );
+  }
+
+  for (const message of messages) {
+    lines.push("", `\\chatrole{${escapeLatexText(message.role)}}`, "", message.body);
+  }
+
+  lines.push("", "\\end{document}");
+
+  return {
+    title,
+    content: `${lines.join("\n").replace(/\n{4,}/g, "\n\n\n").trim()}\n`
   };
 }
 
 async function exportMarkdown(options = {}) {
-  const messages = options.autoScroll ? await collectMessagesWhileScrolling() : readMessagesFromDom();
+  const messages = options.autoScroll ? await collectMessagesWhileScrolling("markdown") : readMessagesFromDom("markdown");
 
   if (!messages.length) {
     throw new Error("No conversation messages were found on this page.");
@@ -434,10 +699,24 @@ async function exportMarkdown(options = {}) {
   return { ...buildMarkdown(messages, options), messageCount: messages.length };
 }
 
+async function exportLatex(options = {}) {
+  const messages = options.autoScroll ? await collectMessagesWhileScrolling("latex") : readMessagesFromDom("latex");
+
+  if (!messages.length) {
+    throw new Error("No conversation messages were found on this page.");
+  }
+
+  return { ...buildLatex(messages, options), messageCount: messages.length };
+}
+
+async function exportConversation(options = {}) {
+  return options.format === "latex" ? exportLatex(options) : exportMarkdown(options);
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type !== EXPORT_MESSAGE) return false;
 
-  exportMarkdown(message.options)
+  exportConversation(message.options)
     .then((result) => sendResponse({ ok: true, ...result }))
     .catch((error) => sendResponse({ ok: false, error: error.message || "Export failed." }));
 
