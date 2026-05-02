@@ -22,16 +22,39 @@ function fenceFor(code) {
   return "`".repeat(maxLength + 1);
 }
 
+function codeTextFromPre(pre) {
+  const codeNode = pre.querySelector("code") || pre;
+  const lineNodes = Array.from(codeNode.querySelectorAll(":scope > span, :scope > div, [data-line]"))
+    .filter((node) => !node.querySelector(":scope > span, :scope > div, [data-line]"));
+
+  if (lineNodes.length > 1) {
+    return lineNodes.map((line) => line.innerText || line.textContent || "").join("\n").replace(/\n+$/g, "");
+  }
+
+  return (codeNode.innerText || codeNode.textContent || "").replace(/\n+$/g, "");
+}
+
 function textFromNode(node) {
   return normalizeWhitespace(node.innerText || node.textContent || "");
 }
 
 function absoluteUrl(href) {
   try {
-    return new URL(href, location.href).toString();
+    const url = new URL(href, location.href);
+    Array.from(url.searchParams.keys()).forEach((key) => {
+      if (key.toLowerCase().startsWith("utm_")) {
+        url.searchParams.delete(key);
+      }
+    });
+    return url.toString();
   } catch {
     return href;
   }
+}
+
+function latexFromKatex(element) {
+  const annotation = element.querySelector(".katex-mathml annotation[encoding='application/x-tex']");
+  return normalizeWhitespace(annotation?.textContent || "");
 }
 
 function inlineMarkdown(node) {
@@ -45,6 +68,21 @@ function inlineMarkdown(node) {
 
   const element = node;
   const tag = element.tagName.toLowerCase();
+
+  if (element.matches(".katex-display")) {
+    const latex = latexFromKatex(element);
+    return latex ? `\n\n$$\n${latex}\n$$\n\n` : "";
+  }
+
+  if (element.matches(".katex")) {
+    const latex = latexFromKatex(element);
+    return latex ? `$${latex}$` : "";
+  }
+
+  if (element.matches(".katex-html, .katex-mathml")) {
+    return "";
+  }
+
   const children = Array.from(element.childNodes).map(inlineMarkdown).join("");
 
   if (tag === "br") return "\n";
@@ -81,13 +119,23 @@ function blockMarkdown(node, listDepth = 0) {
   const element = node;
   const tag = element.tagName.toLowerCase();
 
-  if (element.matches("[data-testid='copy-turn-action-button'], button, svg, style, script")) {
+  if (element.matches("[data-testid='copy-turn-action-button'], button, svg, style, script, .katex-html, .katex-mathml")) {
     return "";
+  }
+
+  if (element.matches(".katex-display")) {
+    const latex = latexFromKatex(element);
+    return latex ? `\n\n$$\n${latex}\n$$\n\n` : "";
+  }
+
+  if (element.matches(".katex")) {
+    const latex = latexFromKatex(element);
+    return latex ? `$${latex}$` : "";
   }
 
   if (tag === "pre") {
     const codeNode = element.querySelector("code") || element;
-    const code = (codeNode.textContent || "").replace(/\n+$/g, "");
+    const code = codeTextFromPre(element);
     const languageClass = Array.from(codeNode.classList || []).find((className) => className.startsWith("language-"));
     const language = languageClass ? languageClass.replace(/^language-/, "") : "";
     const fence = fenceFor(code);
@@ -110,9 +158,12 @@ function blockMarkdown(node, listDepth = 0) {
 
   if (tag === "ul" || tag === "ol") {
     const ordered = tag === "ol";
+    const start = Number.parseInt(element.getAttribute("start") || "1", 10);
     const items = Array.from(element.children).filter((child) => child.tagName?.toLowerCase() === "li");
     const lines = items.map((item, index) => {
-      const marker = ordered ? `${index + 1}.` : "-";
+      const value = Number.parseInt(item.getAttribute("value") || "", 10);
+      const number = Number.isFinite(value) ? value : (Number.isFinite(start) ? start : 1) + index;
+      const marker = ordered ? `${number}.` : "-";
       const indent = "  ".repeat(listDepth);
       const itemText = normalizeWhitespace(childrenMarkdown(item, listDepth + 1));
       return `${indent}${marker} ${itemText.replace(/\n/g, `\n${indent}  `)}`;
@@ -167,6 +218,39 @@ function elementToMarkdown(element) {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
   return markdown || textFromNode(element);
+}
+
+function removeChatGptTurnLabels(element) {
+  Array.from(element.querySelectorAll("h1, h2, h3, h4, h5, h6")).forEach((heading) => {
+    const text = normalizeWhitespace(heading.textContent || "").toLowerCase();
+    if (text === "you said:" || text === "chatgpt said:") {
+      heading.remove();
+    }
+  });
+}
+
+function cleanMessageBody(markdown) {
+  return markdown
+    .replace(/^#{1,6}\s+(?:You|ChatGPT) said:\s*\n+/i, "")
+    .trim();
+}
+
+function demoteMessageHeadings(markdown) {
+  let inFence = false;
+
+  return markdown.split("\n").map((line) => {
+    if (/^\s*`{3,}/.test(line)) {
+      inFence = !inFence;
+      return line;
+    }
+
+    if (inFence) return line;
+
+    return line.replace(/^(#{1,6})(\s+)/, (_match, hashes, spacing) => {
+      const level = Math.min(hashes.length + 1, 6);
+      return `${"#".repeat(level)}${spacing}`;
+    });
+  }).join("\n");
 }
 
 function findConversationScrollContainer() {
@@ -307,12 +391,13 @@ function getMessageBody(element) {
   });
 
   if (markdownParts.length) {
-    return markdownParts.map(elementToMarkdown).filter(Boolean).join("\n\n");
+    return demoteMessageHeadings(markdownParts.map(elementToMarkdown).filter(Boolean).join("\n\n"));
   }
 
   const clone = element.cloneNode(true);
   clone.querySelectorAll("button, svg, style, script, [aria-hidden='true']").forEach((node) => node.remove());
-  return elementToMarkdown(clone);
+  removeChatGptTurnLabels(clone);
+  return demoteMessageHeadings(cleanMessageBody(elementToMarkdown(clone)));
 }
 
 function conversationTitle() {
@@ -326,7 +411,7 @@ function buildMarkdown(messages, options) {
   const lines = [`# ${title}`];
 
   if (options.includeMetadata) {
-    lines.push("", `- Source: ${location.href}`, `- Exported: ${new Date().toISOString()}`, `- Messages: ${messages.length}`);
+    lines.push("", `- Source: ${absoluteUrl(location.href)}`, `- Exported: ${new Date().toISOString()}`, `- Messages: ${messages.length}`);
   }
 
   for (const message of messages) {
