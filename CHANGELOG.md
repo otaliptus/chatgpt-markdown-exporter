@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.0 - 2026-05-02
 
 - Added LaTeX export support.
 - Added export format selector for Markdown and LaTeX.
