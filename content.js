@@ -59,7 +59,7 @@ function latexFromKatex(element) {
 }
 
 function escapeLatexText(value) {
-  return String(value || "").replace(/[\\{}$&%#_^~]/g, (character) => {
+  return String(value || "").replace(/[\\{}$&%#_^~\u00d7\u2013\u2014\u2018\u2019\u201c\u201d\u2026\u2248]/g, (character) => {
     const replacements = {
       "\\": "\\textbackslash{}",
       "{": "\\{",
@@ -70,7 +70,16 @@ function escapeLatexText(value) {
       "#": "\\#",
       "_": "\\_",
       "^": "\\textasciicircum{}",
-      "~": "\\textasciitilde{}"
+      "~": "\\textasciitilde{}",
+      "\u00d7": "\\ensuremath{\\times}",
+      "\u2013": "--",
+      "\u2014": "---",
+      "\u2018": "'",
+      "\u2019": "'",
+      "\u201c": "``",
+      "\u201d": "''",
+      "\u2026": "\\ldots{}",
+      "\u2248": "\\ensuremath{\\approx}"
     };
     return replacements[character];
   });
@@ -311,7 +320,8 @@ function blockLatex(node, listDepth = 0) {
   }
 
   if (tag === "pre") {
-    return `\n\n\\begin{verbatim}\n${codeTextFromPre(element)}\n\\end{verbatim}\n\n`;
+    const code = escapeLatexText(codeTextFromPre(element)).replace(/\n/g, "\\\\\n");
+    return `\n\n\\begin{quote}\\ttfamily\\small\n${code}\n\\end{quote}\n\n`;
   }
 
   if (/^h[1-6]$/.test(tag)) {
@@ -392,7 +402,7 @@ function tableToLatex(table) {
 
   const width = Math.max(...rows.map((row) => row.length));
   const normalizedRows = rows.map((row) => Array.from({ length: width }, (_, index) => row[index] || ""));
-  const columns = Array.from({ length: width }, () => "l").join(" | ");
+  const columns = Array.from({ length: width }, () => ">{\\raggedright\\arraybackslash}X").join(" | ");
   const body = normalizedRows
     .map((row, index) => {
       const line = `${row.join(" & ")} \\\\`;
@@ -400,7 +410,7 @@ function tableToLatex(table) {
     })
     .join("\n");
 
-  return `\\begin{tabular}{${columns}}\n${body}\n\\end{tabular}`;
+  return `\\begin{center}\n\\small\n\\begin{tabularx}{\\linewidth}{${columns}}\n${body}\n\\end{tabularx}\n\\end{center}`;
 }
 
 function elementToMarkdown(element) {
@@ -648,15 +658,15 @@ function buildLatex(messages, options) {
   const lines = [
     "\\documentclass[12pt]{article}",
     "\\usepackage[utf8]{inputenc}",
-    "\\usepackage{graphicx,amsmath,amsfonts,amssymb,amsthm,latexsym,geometry,color,asymptote,hyperref}",
-    "\\usepackage{enumitem}",
-    "\\usepackage[normalem]{ulem}",
+    "\\usepackage{graphicx,amsmath,amsfonts,amssymb,amsthm,latexsym,geometry,color,hyperref}",
+    "\\usepackage{array,tabularx}",
     "\\geometry{a4paper,total={450pt,700pt}}",
     "\\hypersetup{colorlinks=true,linkcolor=blue,urlcolor=blue,citecolor=blue}",
     "\\DeclareGraphicsExtensions{.pdf,.png,.jpg}",
     "\\setcounter{secnumdepth}{0}",
     "\\linespread{1.2}",
     "\\setlength{\\parindent}{0pt}",
+    "\\providecommand{\\sout}[1]{#1}",
     "\\newcommand{\\chatrole}[1]{\\par\\bigskip\\noindent{\\Large\\textbf{#1}}\\par\\medskip}",
     "",
     `\\title{${escapeLatexText(title)}}`,

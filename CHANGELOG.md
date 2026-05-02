@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.1 - 2026-05-02
+
+- Fixed LaTeX table exports so wide tables wrap within the page width.
+- Improved LaTeX portability by removing unused packages and escaping common Unicode punctuation.
+- Changed LaTeX code block export to avoid raw verbatim content that can break compilation.
+
 ## 1.1.0 - 2026-05-02
 
 - Added LaTeX export support.
