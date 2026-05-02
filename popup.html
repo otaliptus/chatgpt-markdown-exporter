@@ -3,17 +3,24 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>ChatGPT Markdown Exporter</title>
+    <title>ChatGPT Exporter</title>
     <link rel="stylesheet" href="popup.css">
   </head>
   <body>
     <main>
       <header>
-        <h1>Markdown Export</h1>
-        <p>Save the open ChatGPT conversation as a Markdown file.</p>
+        <h1>ChatGPT Export</h1>
+        <p>Save the open ChatGPT conversation as Markdown or LaTeX.</p>
       </header>
 
       <section class="options" aria-label="Export options">
+        <label>
+          <span>Format</span>
+          <select id="format">
+            <option value="markdown">Markdown (.md)</option>
+            <option value="latex">LaTeX (.tex)</option>
+          </select>
+        </label>
         <label>
           <input id="autoScroll" type="checkbox" checked>
           Load entire conversation before export

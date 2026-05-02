@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
 VERSION="$(node -e "console.log(require('$ROOT_DIR/manifest.json').version)")"
-ZIP_NAME="chatgpt-markdown-exporter-v$VERSION.zip"
+ZIP_NAME="chatgpt-exporter-v$VERSION.zip"
 
 rm -rf "$DIST_DIR"
 mkdir -p "$DIST_DIR"

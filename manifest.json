@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "ChatGPT Markdown Exporter",
+  "name": "ChatGPT Exporter",
   "version": "1.0.0",
-  "description": "Download the current ChatGPT conversation as a Markdown file.",
+  "description": "Download the current ChatGPT conversation as a Markdown or LaTeX file.",
   "permissions": ["activeTab", "downloads", "scripting"],
   "host_permissions": ["https://chatgpt.com/*", "https://chat.openai.com/*"],
   "action": {

@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Added LaTeX export support.
+- Added export format selector for Markdown and LaTeX.
+- Improved Markdown math extraction from KaTeX-rendered formulas.
+- Removed ChatGPT UI turn labels from exported user messages.
+- Preserved code block line breaks.
+- Cleaned tracking parameters from exported links.
+
 ## 1.0.0 - 2026-05-01
 
 - Initial release.

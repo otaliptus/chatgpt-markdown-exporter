@@ -2,21 +2,45 @@
 
 const exportButton = document.getElementById("exportButton");
 const statusNode = document.getElementById("status");
+const formatNode = document.getElementById("format");
 const autoScrollNode = document.getElementById("autoScroll");
 const includeMetadataNode = document.getElementById("includeMetadata");
+
+const FORMAT_CONFIG = {
+  markdown: {
+    label: "Markdown",
+    extension: "md",
+    mime: "text/markdown;charset=utf-8"
+  },
+  latex: {
+    label: "LaTeX",
+    extension: "tex",
+    mime: "text/x-tex;charset=utf-8"
+  }
+};
 
 function setStatus(message) {
   statusNode.textContent = message;
 }
 
-function getFilename(title) {
+function selectedFormat() {
+  return FORMAT_CONFIG[formatNode.value] ? formatNode.value : "markdown";
+}
+
+function getFilename(title, format) {
+  const config = FORMAT_CONFIG[format] || FORMAT_CONFIG.markdown;
   const cleanTitle = (title || "chatgpt-conversation")
     .replace(/[\\/:*?"<>|]+/g, "-")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 120);
   const date = new Date().toISOString().slice(0, 10);
-  return `${cleanTitle || "chatgpt-conversation"}-${date}.md`;
+  return `${cleanTitle || "chatgpt-conversation"}-${date}.${config.extension}`;
+}
+
+function updateFormatUi() {
+  const config = FORMAT_CONFIG[selectedFormat()];
+  exportButton.textContent = `Download ${config.label}`;
 }
 
 async function getActiveTab() {
@@ -43,6 +67,8 @@ async function requestConversationExport(tabId, options) {
 
 async function exportConversation() {
   exportButton.disabled = true;
+  const format = selectedFormat();
+  const config = FORMAT_CONFIG[format];
   setStatus("Collecting conversation...");
 
   try {
@@ -52,6 +78,7 @@ async function exportConversation() {
     }
 
     const response = await requestConversationExport(tab.id, {
+      format,
       autoScroll: autoScrollNode.checked,
       includeMetadata: includeMetadataNode.checked
     });
@@ -60,12 +87,17 @@ async function exportConversation() {
       throw new Error(response?.error || "The page did not return an export.");
     }
 
-    const blob = new Blob([response.markdown], { type: "text/markdown;charset=utf-8" });
+    const exportContent = response.content || response.markdown;
+    if (!exportContent) {
+      throw new Error("The page returned an empty export.");
+    }
+
+    const blob = new Blob([exportContent], { type: config.mime });
     const url = URL.createObjectURL(blob);
 
     await chrome.downloads.download({
       url,
-      filename: getFilename(response.title),
+      filename: getFilename(response.title, format),
       saveAs: true
     });
 
@@ -78,4 +110,6 @@ async function exportConversation() {
   }
 }
 
+formatNode.addEventListener("change", updateFormatUi);
 exportButton.addEventListener("click", exportConversation);
+updateFormatUi();
