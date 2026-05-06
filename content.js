@@ -53,6 +53,35 @@ function absoluteUrl(href) {
   }
 }
 
+function hasExportableMedia(element) {
+  const selector = "img, picture, video, audio, canvas, [style*='background-image']";
+  return Boolean(element?.matches?.(selector) || element?.querySelector?.(selector));
+}
+
+function hasExportableContent(element) {
+  return Boolean(textFromNode(element) || hasExportableMedia(element));
+}
+
+function imageAltText(element) {
+  return normalizeWhitespace(
+    element.getAttribute("alt") ||
+    element.getAttribute("aria-label") ||
+    element.closest("[aria-label]")?.getAttribute("aria-label") ||
+    element.getAttribute("title") ||
+    "image"
+  );
+}
+
+function imageSource(element) {
+  const src =
+    element.currentSrc ||
+    element.getAttribute("src") ||
+    element.getAttribute("data-src") ||
+    element.getAttribute("data-original") ||
+    element.closest("a[href]")?.getAttribute("href");
+  return src ? absoluteUrl(src) : "";
+}
+
 function latexFromKatex(element) {
   const annotation = element.querySelector(".katex-mathml annotation[encoding='application/x-tex']");
   return normalizeWhitespace(annotation?.textContent || "");
@@ -128,14 +157,15 @@ function inlineMarkdown(node) {
     return "";
   }
 
-  const children = Array.from(element.childNodes).map(inlineMarkdown).join("");
-
   if (tag === "br") return "\n";
   if (tag === "img") {
-    const alt = normalizeWhitespace(element.getAttribute("alt") || element.getAttribute("aria-label") || "image");
-    const src = element.getAttribute("src");
-    return src ? `![${alt}](${absoluteUrl(src)})` : alt;
+    const alt = imageAltText(element);
+    const src = imageSource(element);
+    return src ? `![${alt}](${src})` : alt;
   }
+
+  const children = Array.from(element.childNodes).map(inlineMarkdown).join("");
+
   if (tag === "input" && element.getAttribute("type") === "checkbox") {
     return element.checked ? "[x]" : "[ ]";
   }
@@ -164,7 +194,11 @@ function blockMarkdown(node, listDepth = 0) {
   const element = node;
   const tag = element.tagName.toLowerCase();
 
-  if (element.matches("[data-testid='copy-turn-action-button'], button, svg, style, script, .katex-html, .katex-mathml")) {
+  if (element.matches("[data-testid='copy-turn-action-button'], svg, style, script, .katex-html, .katex-mathml")) {
+    return "";
+  }
+
+  if (tag === "button" && !hasExportableMedia(element)) {
     return "";
   }
 
@@ -220,6 +254,11 @@ function blockMarkdown(node, listDepth = 0) {
     return `\n\n${tableToMarkdown(element)}\n\n`;
   }
 
+  if (tag === "figure") {
+    const body = normalizeWhitespace(childrenMarkdown(element, listDepth));
+    return body ? `\n\n${body}\n\n` : "";
+  }
+
   if (tag === "hr") {
     return "\n\n---\n\n";
   }
@@ -269,14 +308,15 @@ function inlineLatex(node) {
     return "";
   }
 
-  const children = Array.from(element.childNodes).map(inlineLatex).join("");
-
   if (tag === "br") return "\n";
   if (tag === "img") {
-    const alt = normalizeWhitespace(element.getAttribute("alt") || element.getAttribute("aria-label") || "image");
-    const src = element.getAttribute("src");
-    return src ? latexCommand("href", `${escapeLatexUrl(absoluteUrl(src))}{${escapeLatexText(alt || src)}}`) : escapeLatexText(alt);
+    const alt = imageAltText(element);
+    const src = imageSource(element);
+    return src ? `\\href{${escapeLatexUrl(src)}}{${escapeLatexText(alt || src)}}` : escapeLatexText(alt);
   }
+
+  const children = Array.from(element.childNodes).map(inlineLatex).join("");
+
   if (tag === "input" && element.getAttribute("type") === "checkbox") {
     return element.checked ? "$\\boxtimes$" : "$\\square$";
   }
@@ -305,7 +345,11 @@ function blockLatex(node, listDepth = 0) {
   const element = node;
   const tag = element.tagName.toLowerCase();
 
-  if (element.matches("[data-testid='copy-turn-action-button'], button, svg, style, script, .katex-html, .katex-mathml")) {
+  if (element.matches("[data-testid='copy-turn-action-button'], svg, style, script, .katex-html, .katex-mathml")) {
+    return "";
+  }
+
+  if (tag === "button" && !hasExportableMedia(element)) {
     return "";
   }
 
@@ -350,6 +394,11 @@ function blockLatex(node, listDepth = 0) {
 
   if (tag === "table") {
     return `\n\n${tableToLatex(element)}\n\n`;
+  }
+
+  if (tag === "figure") {
+    const body = normalizeWhitespace(childrenLatex(element, listDepth));
+    return body ? `\n\n${body}\n\n` : "";
   }
 
   if (tag === "hr") {
@@ -439,6 +488,24 @@ function removeChatGptTurnLabels(element) {
 function cleanMessageBody(markdown) {
   return markdown
     .replace(/^#{1,6}\s+(?:You|ChatGPT) said:\s*\n+/i, "")
+    .trim();
+}
+
+function cleanMarkdownMediaSpacing(markdown) {
+  return markdown
+    .replace(/\((!\[[^\]]*\]\([^)]+\))([^()\n]+\.(?:avif|bmp|gif|jpe?g|png|webp|tiff?))\)/gi, "$1\n\n($2)")
+    .replace(/(!\[[^\]]*\]\([^)]+\))(?=\S)/g, "$1\n\n")
+    .replace(/([^\s])(!\[[^\]]*\]\([^)]+\))/g, "$1\n\n$2")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function cleanLatexMediaSpacing(latex) {
+  return latex
+    .replace(/\(\s*(\\href\{[^}]+\}\{[^}]+\})\s*([^()\n]+\.(?:avif|bmp|gif|jpe?g|png|webp|tiff?))\)/gi, "$1\n\n($2)")
+    .replace(/(\\href\{[^}]+\}\{[^}]+\})(?=\S)/g, "$1\n\n")
+    .replace(/([^\s])(\\href\{[^}]+\}\{[^}]+\})/g, "$1\n\n$2")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
@@ -562,7 +629,7 @@ function getMessageElements() {
   ];
 
   for (const selector of selectors) {
-    const elements = Array.from(document.querySelectorAll(selector)).filter((element) => textFromNode(element));
+    const elements = Array.from(document.querySelectorAll(selector)).filter(hasExportableContent);
     if (elements.length > 1) return dedupeNestedMessages(elements);
   }
 
@@ -606,12 +673,19 @@ function getMessageBody(element, format = "markdown") {
       : Array.from(part.querySelectorAll(".markdown, [class*='markdown']"));
 
     return containers.filter((container, index) => {
-      if (!textFromNode(container)) return false;
+      if (!hasExportableContent(container)) return false;
       return !containers.some((other, otherIndex) => otherIndex !== index && other.contains(container));
     });
   });
 
-  if (markdownParts.length) {
+  const mediaElements = parts.flatMap((part) =>
+    Array.from(part.querySelectorAll("img, picture, video, audio, canvas, [style*='background-image']"))
+  );
+  const hasMediaOutsideMarkdown = mediaElements.some((media) =>
+    !markdownParts.some((container) => container.contains(media))
+  );
+
+  if (markdownParts.length && !hasMediaOutsideMarkdown) {
     if (format === "latex") {
       return markdownParts.map(elementToLatex).filter(Boolean).join("\n\n");
     }
@@ -620,13 +694,19 @@ function getMessageBody(element, format = "markdown") {
   }
 
   const clone = element.cloneNode(true);
-  clone.querySelectorAll("button, svg, style, script, [aria-hidden='true']").forEach((node) => node.remove());
+  clone.querySelectorAll("button, svg, style, script, [aria-hidden='true']").forEach((node) => {
+    if (node.matches?.("button") && hasExportableMedia(node)) {
+      node.replaceWith(...Array.from(node.childNodes));
+      return;
+    }
+    node.remove();
+  });
   removeChatGptTurnLabels(clone);
   if (format === "latex") {
-    return formatLeadingUploadedFileLabels(elementToLatex(clone));
+    return cleanLatexMediaSpacing(formatLeadingUploadedFileLabels(elementToLatex(clone)));
   }
 
-  return demoteMessageHeadings(formatLeadingUploadedFileLabels(cleanMessageBody(elementToMarkdown(clone))));
+  return demoteMessageHeadings(cleanMarkdownMediaSpacing(formatLeadingUploadedFileLabels(cleanMessageBody(elementToMarkdown(clone)))));
 }
 
 function conversationTitle() {

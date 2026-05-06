@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.2 - 2026-05-06
+
+- Fixed exports for ChatGPT messages containing uploaded images.
+- Preserved image thumbnails that ChatGPT wraps in buttons or file preview controls.
+- Improved Markdown and LaTeX spacing around exported image links and prompts.
+- Fixed LaTeX image links to use valid `\href{url}{label}` syntax.
+
 ## 1.1.1 - 2026-05-02
 
 - Fixed LaTeX table exports so wide tables wrap within the page width.
