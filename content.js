@@ -153,7 +153,7 @@ function inlineMarkdown(node) {
     return latex ? `$${latex}$` : "";
   }
 
-  if (element.matches(".katex-html, .katex-mathml")) {
+  if (element.matches(".katex-html, .katex-mathml, [data-markdown-copy='exclude']")) {
     return "";
   }
 
@@ -169,7 +169,7 @@ function inlineMarkdown(node) {
   if (tag === "input" && element.getAttribute("type") === "checkbox") {
     return element.checked ? "[x]" : "[ ]";
   }
-  if (tag === "code") return `\`${(element.textContent || "").replace(/`/g, "\\`")}\``;
+  if (tag === "code" || element.matches("[data-markdown-copy='inline-code']")) return `\`${(element.textContent || "").replace(/`/g, "\\`")}\``;
   if (tag === "strong" || tag === "b") return children ? `**${children}**` : "";
   if (tag === "em" || tag === "i") return children ? `*${children}*` : "";
   if (tag === "s" || tag === "del") return children ? `~~${children}~~` : "";
@@ -194,7 +194,7 @@ function blockMarkdown(node, listDepth = 0) {
   const element = node;
   const tag = element.tagName.toLowerCase();
 
-  if (element.matches("[data-testid='copy-turn-action-button'], svg, style, script, .katex-html, .katex-mathml")) {
+  if (element.matches("[data-testid='copy-turn-action-button'], svg, style, script, .katex-html, .katex-mathml, [data-markdown-copy='exclude']")) {
     return "";
   }
 
@@ -212,7 +212,7 @@ function blockMarkdown(node, listDepth = 0) {
     return latex ? `$${latex}$` : "";
   }
 
-  if (tag === "pre") {
+  if (tag === "pre" || element.matches("[data-markdown-copy='code-block']")) {
     const codeNode = element.querySelector("code") || element;
     const code = codeTextFromPre(element);
     const languageClass = Array.from(codeNode.classList || []).find((className) => className.startsWith("language-"));
@@ -304,7 +304,7 @@ function inlineLatex(node) {
     return latex ? `\\(${latex}\\)` : "";
   }
 
-  if (element.matches(".katex-html, .katex-mathml")) {
+  if (element.matches(".katex-html, .katex-mathml, [data-markdown-copy='exclude']")) {
     return "";
   }
 
@@ -320,7 +320,7 @@ function inlineLatex(node) {
   if (tag === "input" && element.getAttribute("type") === "checkbox") {
     return element.checked ? "$\\boxtimes$" : "$\\square$";
   }
-  if (tag === "code") return latexCommand("texttt", escapeLatexText(element.textContent || ""));
+  if (tag === "code" || element.matches("[data-markdown-copy='inline-code']")) return latexCommand("texttt", escapeLatexText(element.textContent || ""));
   if (tag === "strong" || tag === "b") return latexCommand("textbf", children);
   if (tag === "em" || tag === "i") return latexCommand("emph", children);
   if (tag === "s" || tag === "del") return latexCommand("sout", children);
@@ -345,7 +345,7 @@ function blockLatex(node, listDepth = 0) {
   const element = node;
   const tag = element.tagName.toLowerCase();
 
-  if (element.matches("[data-testid='copy-turn-action-button'], svg, style, script, .katex-html, .katex-mathml")) {
+  if (element.matches("[data-testid='copy-turn-action-button'], svg, style, script, .katex-html, .katex-mathml, [data-markdown-copy='exclude']")) {
     return "";
   }
 
@@ -363,7 +363,7 @@ function blockLatex(node, listDepth = 0) {
     return latex ? `\\(${latex}\\)` : "";
   }
 
-  if (tag === "pre") {
+  if (tag === "pre" || element.matches("[data-markdown-copy='code-block']")) {
     const code = escapeLatexText(codeTextFromPre(element)).replace(/\n/g, "\\\\\n");
     return `\n\n\\begin{quote}\\ttfamily\\small\n${code}\n\\end{quote}\n\n`;
   }
@@ -542,6 +542,12 @@ function demoteMessageHeadings(markdown) {
 }
 
 function findConversationScrollContainer() {
+  // Recent layouts scroll a div inside main, rather than main itself.
+  for (let node = getMessageElements()[0]?.parentElement; node; node = node.parentElement) {
+    if (node.scrollHeight > node.clientHeight + 100 && /auto|scroll/.test(getComputedStyle(node).overflowY)) {
+      return node;
+    }
+  }
   const candidates = [
     document.querySelector("main"),
     document.querySelector("[role='main']"),
@@ -558,9 +564,11 @@ function readMessagesFromDom(format = "markdown") {
       const role = getRole(element);
       const body = getMessageBody(element, format);
       const testId = element.getAttribute("data-testid");
+      const unitKey = element.getAttribute("data-chatgpt-search-unit-key");
+      const messageId = element.getAttribute("data-message-id") || element.getAttribute("data-chatgpt-search-message-ids");
       return {
-        key: testId || `${index}:${role}:${body.slice(0, 160)}`,
-        order: turnOrder(testId, index),
+        key: messageId ? `${role}:${messageId}` : unitKey || testId || `${index}:${role}:${body.slice(0, 160)}`,
+        order: turnOrder(unitKey || testId, index),
         role,
         body
       };
@@ -569,8 +577,10 @@ function readMessagesFromDom(format = "markdown") {
 }
 
 function turnOrder(testId, fallback) {
+  const unit = String(testId || "").match(/^(?:fallback-)?turn-(\d+):(\d+):/);
+  if (unit) return [Number(unit[1]), Number(unit[2])];
   const match = String(testId || "").match(/conversation-turn-(\d+)/);
-  return match ? Number(match[1]) : fallback;
+  return [match ? Number(match[1]) : fallback, 0];
 }
 
 function rememberMessages(collected, messages) {
@@ -585,52 +595,60 @@ function rememberMessages(collected, messages) {
 async function collectMessagesWhileScrolling(format = "markdown") {
   const scroller = findConversationScrollContainer();
   const originalTop = scroller.scrollTop;
+  // column-reverse uses negative scrollTop: zero is the bottom of the thread.
+  const reversed = getComputedStyle(scroller).flexDirection === "column-reverse";
+  const scrollRange = () => Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+  const readTop = () => reversed ? scrollRange() + scroller.scrollTop : scroller.scrollTop;
+  const scrollTo = (top) => scroller.scrollTo({ top: reversed ? top - scrollRange() : top, behavior: "auto" });
   const collected = new Map();
   let previousHeight = -1;
 
-  for (let attempt = 0; attempt < 30; attempt += 1) {
-    scroller.scrollTo({ top: 0, behavior: "auto" });
-    await sleep(250);
-    if (scroller.scrollHeight === previousHeight) break;
-    previousHeight = scroller.scrollHeight;
-  }
+  try {
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      scrollTo(0);
+      await sleep(250);
+      if (scroller.scrollHeight === previousHeight) break;
+      previousHeight = scroller.scrollHeight;
+    }
 
-  rememberMessages(collected, readMessagesFromDom(format));
-
-  let lastTop = -1;
-  for (let attempt = 0; attempt < 240; attempt += 1) {
-    const step = Math.max(Math.floor(scroller.clientHeight * 0.75), 600);
-    const nextTop = Math.min(scroller.scrollTop + step, scroller.scrollHeight);
-    scroller.scrollTo({ top: nextTop, behavior: "auto" });
-    await sleep(180);
     rememberMessages(collected, readMessagesFromDom(format));
 
-    const nearBottom = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 12;
-    if (nearBottom && scroller.scrollTop === lastTop) break;
-    if (nearBottom) {
-      await sleep(300);
+    let lastTop = -1;
+    for (let attempt = 0; attempt < 240; attempt += 1) {
+      const step = Math.max(Math.floor(scroller.clientHeight * 0.75), 600);
+      const nextTop = Math.min(readTop() + step, scrollRange());
+      scrollTo(nextTop);
+      await sleep(180);
       rememberMessages(collected, readMessagesFromDom(format));
-      break;
-    }
-    if (scroller.scrollTop === lastTop) break;
-    lastTop = scroller.scrollTop;
-  }
 
-  scroller.scrollTo({ top: originalTop, behavior: "auto" });
-  await sleep(100);
-  return Array.from(collected.values()).sort((a, b) => a.order - b.order);
+      const nearBottom = readTop() >= scrollRange() - 12;
+      if (nearBottom && readTop() === lastTop) break;
+      if (nearBottom) {
+        await sleep(300);
+        rememberMessages(collected, readMessagesFromDom(format));
+        break;
+      }
+      if (readTop() === lastTop) break;
+      lastTop = readTop();
+    }
+
+    return Array.from(collected.values()).sort((a, b) => a.order[0] - b.order[0] || a.order[1] - b.order[1]);
+  } finally {
+    scroller.scrollTo({ top: originalTop, behavior: "auto" });
+    await sleep(100);
+  }
 }
 
 function getMessageElements() {
   const selectors = [
+    "[data-chatgpt-search-unit-key$=':user'], [data-chatgpt-search-unit-key$=':assistant']",
     "[data-testid^='conversation-turn-']",
-    "[data-message-author-role]",
-    "article"
+    "article, [data-message-author-role]"
   ];
 
   for (const selector of selectors) {
     const elements = Array.from(document.querySelectorAll(selector)).filter(hasExportableContent);
-    if (elements.length > 1) return dedupeNestedMessages(elements);
+    if (elements.length) return dedupeNestedMessages(elements);
   }
 
   return [];
@@ -643,6 +661,8 @@ function dedupeNestedMessages(elements) {
 }
 
 function getRole(element) {
+  const unitRole = element.getAttribute("data-chatgpt-search-unit-key")?.split(":").pop();
+  if (ROLE_LABELS[unitRole]) return ROLE_LABELS[unitRole];
   const explicitRole = element.getAttribute("data-message-author-role");
   if (explicitRole) return ROLE_LABELS[explicitRole] || explicitRole;
 
@@ -668,9 +688,9 @@ function getMessageBody(element, format = "markdown") {
 
   const parts = roleParts.length ? roleParts : [element];
   const markdownParts = parts.flatMap((part) => {
-    const containers = part.matches(".markdown, [class*='markdown']")
+    const containers = part.matches(".markdown, [data-markdown-text-style='assistant-message']")
       ? [part]
-      : Array.from(part.querySelectorAll(".markdown, [class*='markdown']"));
+      : Array.from(part.querySelectorAll(".markdown, [data-markdown-text-style='assistant-message']"));
 
     return containers.filter((container, index) => {
       if (!hasExportableContent(container)) return false;

@@ -86,6 +86,12 @@ button:disabled {
   opacity: 0.72;
 }
 
+#copyButton {
+  color: inherit;
+  background: transparent;
+  border: 1px solid #718779;
+}
+
 #status {
   min-height: 18px;
   color: #35433b;

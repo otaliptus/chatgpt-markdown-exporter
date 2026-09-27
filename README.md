@@ -1,12 +1,12 @@
 # ChatGPT Exporter
 
-Chrome extension for exporting ChatGPT conversations as local Markdown or LaTeX files.
+Chrome extension for exporting ChatGPT conversations as local Markdown or LaTeX files, or copying their source directly to the clipboard.
 
-It runs in the browser, reads the active ChatGPT conversation only when you click export, converts the rendered conversation to Markdown or LaTeX, and saves the result to your device.
+It runs in the browser, reads the active ChatGPT conversation only when you click export, converts the rendered conversation to Markdown or LaTeX, and saves the result to your device or clipboard.
 
 ## Features
 
-- Exports ChatGPT conversations to `.md` or `.tex`.
+- Downloads ChatGPT conversations as `.md` or `.tex`, or copies either format directly to the clipboard.
 - Works on `chatgpt.com` and `chat.openai.com`.
 - Supports public shared ChatGPT conversation pages.
 - Preserves common Markdown structure: headings, paragraphs, links, emphasis, lists, blockquotes, tables, images, and code blocks.
@@ -18,7 +18,7 @@ It runs in the browser, reads the active ChatGPT conversation only when you clic
 ## Install Locally
 
 1. Download or clone this repository.
-2. Open `chrome://extensions` or `edge://extensions`.
+2. Open `chrome://extensions`, `brave://extensions`, or `edge://extensions`.
 3. Enable **Developer mode**.
 4. Click **Load unpacked**.
 5. Select the repository folder.
@@ -29,9 +29,9 @@ It runs in the browser, reads the active ChatGPT conversation only when you clic
 2. Click the extension icon.
 3. Choose **Markdown (.md)** or **LaTeX (.tex)**.
 4. Keep **Load entire conversation before export** enabled for long conversations.
-5. Click **Download Markdown** or **Download LaTeX**.
+5. Click **Download Markdown** / **Download LaTeX**, or **Copy Markdown** / **Copy LaTeX**.
 
-The extension will create the selected file through the browser download flow.
+Downloads use the browser download flow. Copy places the same Markdown or LaTeX source on your clipboard, ready to paste into an editor. Keep the popup open until it reports success; both actions use the selected conversation-loading and metadata options.
 
 ## Permissions
 
@@ -39,6 +39,7 @@ The extension requests a small set of permissions:
 
 - `activeTab`: reads the current ChatGPT tab only after the user clicks the extension.
 - `downloads`: saves the generated Markdown or LaTeX file.
+- `clipboardWrite`: copies the generated source after you click Copy, including after a long conversation finishes loading. It does not read your clipboard.
 - `scripting`: injects the local content script into an already-open ChatGPT tab if needed.
 - `https://chatgpt.com/*` and `https://chat.openai.com/*`: limits the extension to ChatGPT pages.
 
@@ -47,6 +48,12 @@ The extension requests a small set of permissions:
 Conversation content is processed locally in the browser. The extension does not collect, transmit, sell, or share user data.
 
 See [PRIVACY.md](PRIVACY.md).
+
+## Development checks
+
+Run `npm ci` and `npm test` for DOM extraction and popup regression tests. The sanitized current-layout fixture mirrors the message markers, Markdown root, and code blocks observed in ChatGPT; it contains no real conversation content. Test dependencies are not included in the extension package.
+
+After updating an unpacked installation, reload the extension and refresh existing ChatGPT tabs.
 
 ## Build Release Zip
 

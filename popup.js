@@ -1,6 +1,7 @@
 "use strict";
 
 const exportButton = document.getElementById("exportButton");
+const copyButton = document.getElementById("copyButton");
 const statusNode = document.getElementById("status");
 const formatNode = document.getElementById("format");
 const autoScrollNode = document.getElementById("autoScroll");
@@ -41,6 +42,7 @@ function getFilename(title, format) {
 function updateFormatUi() {
   const config = FORMAT_CONFIG[selectedFormat()];
   exportButton.textContent = `Download ${config.label}`;
+  copyButton.textContent = `Copy ${config.label}`;
 }
 
 async function getActiveTab() {
@@ -65,8 +67,14 @@ async function requestConversationExport(tabId, options) {
   }
 }
 
-async function exportConversation() {
-  exportButton.disabled = true;
+function setBusy(busy) {
+  for (const control of [exportButton, copyButton, formatNode, autoScrollNode, includeMetadataNode]) {
+    control.disabled = busy;
+  }
+}
+
+async function exportConversation(destination = "download") {
+  setBusy(true);
   const format = selectedFormat();
   const config = FORMAT_CONFIG[format];
   setStatus("Collecting conversation...");
@@ -92,24 +100,37 @@ async function exportConversation() {
       throw new Error("The page returned an empty export.");
     }
 
+    if (destination === "clipboard") {
+      try {
+        await navigator.clipboard.writeText(exportContent);
+      } catch {
+        throw new Error("Could not copy to the clipboard. Keep this popup open and try again, or download the file.");
+      }
+      setStatus(`Copied ${response.messageCount} messages as ${config.label}.`);
+      return;
+    }
+
     const blob = new Blob([exportContent], { type: config.mime });
     const url = URL.createObjectURL(blob);
 
-    await chrome.downloads.download({
-      url,
-      filename: getFilename(response.title, format),
-      saveAs: true
-    });
-
-    setStatus(`Exported ${response.messageCount} messages.`);
-    setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    try {
+      await chrome.downloads.download({
+        url,
+        filename: getFilename(response.title, format),
+        saveAs: true
+      });
+      setStatus(`Exported ${response.messageCount} messages.`);
+    } finally {
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    }
   } catch (error) {
     setStatus(error.message || "Export failed.");
   } finally {
-    exportButton.disabled = false;
+    setBusy(false);
   }
 }
 
 formatNode.addEventListener("change", updateFormatUi);
-exportButton.addEventListener("click", exportConversation);
+exportButton.addEventListener("click", () => exportConversation("download"));
+copyButton.addEventListener("click", () => exportConversation("clipboard"));
 updateFormatUi();
