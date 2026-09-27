@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0 - 2026-09-27
+
+- Fixed “No conversation messages were found” on ChatGPT's updated conversation layout.
+- Preserved full message text with the new Markdown renderer, including inline code, code blocks, and math.
+- Fixed full-conversation loading in nested, reverse-scrolling thread containers.
+- Added Copy Markdown and Copy LaTeX using the selected export options.
+- Added clipboard-write permission; the extension never reads clipboard content.
+- Added regression tests for current and legacy layouts, virtualized scrolling, and popup copy/download flows.
+
 ## 1.1.2 - 2026-05-06
 
 - Fixed exports for ChatGPT messages containing uploaded images.
